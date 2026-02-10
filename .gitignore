@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# Website
+website/
+build/icon.iconset/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
+
+# Secrets & credentials — NEVER commit these
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.cert
+*.csr
+credentials.json
+secrets.json
+**/serviceAccountKey.json
+
+# macOS code signing
+*.provisionprofile
+embedded.provisionprofile
+CSC_*
+
+# Electron builder cache
+electron-builder.yml

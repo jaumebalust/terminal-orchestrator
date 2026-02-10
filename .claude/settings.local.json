@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --version:*)",
+      "Bash(npm:*)",
+      "Bash(electron:*)",
+      "WebSearch",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(gh api:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(node -e:*)",
+      "Bash(pkill:*)",
+      "Bash(npx @electron/rebuild:*)",
+      "Bash(ls:*)",
+      "Bash(find:*)",
+      "Bash(sips:*)",
+      "Bash(npx png-to-ico:*)"
+    ]
+  }
+}
