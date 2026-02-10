@@ -1,6 +1,6 @@
 {
   "name": "orchestrator-terminal",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Terminal Orchestrator - Multi-project terminal workspace",
   "main": "src/main/main.js",
   "scripts": {
@@ -87,7 +87,10 @@
     "type": "git",
     "url": "https://github.com/jaumebalust/terminal-orchestrator.git"
   },
-  "author": "jaumebalust",
+  "author": {
+    "name": "jaumebalust",
+    "email": "jaumebalust@users.noreply.github.com"
+  },
   "license": "MIT",
   "dependencies": {
     "@xterm/addon-fit": "^0.10.0",

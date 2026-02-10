@@ -11,13 +11,13 @@ jobs:
       matrix:
         include:
           - os: macos-latest
-            build_cmd: npx electron-builder --mac --arm64 --x64
+            build_cmd: npx electron-builder --mac --arm64 --x64 --publish never
             artifact_name: dist-mac
           - os: ubuntu-latest
-            build_cmd: npx electron-builder --linux
+            build_cmd: npx electron-builder --linux --publish never
             artifact_name: dist-linux
           - os: windows-latest
-            build_cmd: npx electron-builder --win
+            build_cmd: npx electron-builder --win --publish never
             artifact_name: dist-win
 
     runs-on: ${{ matrix.os }}
