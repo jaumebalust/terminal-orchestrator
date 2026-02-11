@@ -4,6 +4,8 @@ A multi-project terminal workspace for macOS, Windows, and Linux. Organize termi
 
 ![Electron](https://img.shields.io/badge/Electron-28-blue) ![macOS](https://img.shields.io/badge/macOS-arm64%20%7C%20x64-black) ![Windows](https://img.shields.io/badge/Windows-x64-0078D6) ![Linux](https://img.shields.io/badge/Linux-x64-FCC624) ![License](https://img.shields.io/badge/license-MIT-green)
 
+![Terminal Orchestrator](example.png)
+
 ## Features
 
 - **Projects & Terminals** — Group terminals by project, each with its own working directory
