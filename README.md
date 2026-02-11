@@ -17,24 +17,6 @@ A multi-project terminal workspace for macOS, Windows, and Linux. Organize termi
 - **Resizable Sidebar** — Drag to resize, width persists across sessions
 - **Cross-platform** — Native experience on macOS (hidden title bar, traffic lights), Windows, and Linux
 
-## Layout
-
-```
-┌──────────────────────────────────────────────────┐
-│          Terminal Orchestrator              [⚙]  │
-├────────────┬─────────────────────────────────────┤
-│ PROJECTS + │                                     │
-│            │  $ claude                           │
-│ My Project │  Hello! How can I help?             │
-│  ▶ ○ claude│                                     │
-│      claude│                                     │
-│  ▶ ○ serve │                                     │
-│      npm.. │                                     │
-│  [+ term]  │                                     │
-│            │                                     │
-└────────────┴─────────────────────────────────────┘
-```
-
 ## Install
 
 ### Download
