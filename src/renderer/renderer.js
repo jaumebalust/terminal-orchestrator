@@ -234,9 +234,9 @@
     }).catch(() => {});
   }
 
-  function persist() {
+  function persist(skipRender) {
     window.api.saveState(state);
-    sidebar.setState(state);
+    if (!skipRender) sidebar.setState(state);
   }
 
   // --- PTY spawning ---
@@ -342,7 +342,7 @@
         const found = findTerminalAcrossProjects(terminalId);
         if (found) {
           found.terminal.lastCommand = command;
-          persist();
+          persist(true);
         }
       }
       commandBuffers.set(terminalId, '');
@@ -354,7 +354,7 @@
         const found = findTerminalAcrossProjects(terminalId);
         if (found) {
           found.terminal.lastCommand = typed;
-          persist();
+          persist(true);
         }
       }
       commandBuffers.set(terminalId, '');
