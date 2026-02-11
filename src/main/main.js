@@ -123,8 +123,8 @@ function buildAppMenu() {
 
 // --- IPC Handlers ---
 
-ipcMain.handle('pty:spawn', (event, { terminalId, cwd, cols, rows }) => {
-  const ptyProcess = ptyManager.spawn(terminalId, cwd, cols, rows);
+ipcMain.handle('pty:spawn', (event, { terminalId, cwd, cols, rows, shell, shellArgs }) => {
+  const ptyProcess = ptyManager.spawn(terminalId, cwd, cols, rows, shell, shellArgs);
 
   ptyProcess.onData((data) => {
     if (mainWindow && !mainWindow.isDestroyed()) {

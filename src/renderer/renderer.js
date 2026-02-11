@@ -53,14 +53,21 @@
   const commandPalette = new CommandPalette();
 
   // --- Theme Editor ---
-  const themeEditor = new ThemeEditor((theme) => {
-    terminalManager.setTheme(theme.terminal);
-    state.theme = themeEditor.getSerializable();
-    window.api.saveState(state);
-  });
+  const themeEditor = new ThemeEditor(
+    (theme) => {
+      terminalManager.setTheme(theme.terminal);
+      state.theme = themeEditor.getSerializable();
+      window.api.saveState(state);
+    },
+    (shellConfig) => {
+      state.defaultShell = shellConfig;
+      persist();
+    }
+  );
 
   const loadedTheme = themeEditor.loadTheme(state.theme);
   themeEditor.applyTheme(loadedTheme);
+  themeEditor.loadShellConfig(state.defaultShell || null);
 
   document.getElementById('theme-btn').addEventListener('click', () => {
     themeEditor.toggle();
@@ -248,11 +255,14 @@
     // Get dimensions after creating
     const dims = terminalManager.getDimensions(terminalId) || { cols: 80, rows: 24 };
 
+    const shellConfig = state.defaultShell || null;
     await window.api.spawnPty({
       terminalId,
       cwd: cwd || undefined,
       cols: dims.cols,
-      rows: dims.rows
+      rows: dims.rows,
+      shell: shellConfig ? shellConfig.path : undefined,
+      shellArgs: shellConfig ? shellConfig.args : undefined
     });
 
     // Pre-fill last command at the prompt so user can just press Enter

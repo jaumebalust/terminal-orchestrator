@@ -4,13 +4,13 @@ const { execSync, execFile } = require('child_process');
 
 const ptys = new Map();
 
-function spawn(terminalId, cwd, cols, rows) {
+function spawn(terminalId, cwd, cols, rows, shell, shellArgs) {
   const isWin = process.platform === 'win32';
-  const shell = isWin
+  const resolvedShell = shell || (isWin
     ? process.env.COMSPEC || 'cmd.exe'
-    : process.env.SHELL || '/bin/zsh';
-  const args = isWin ? [] : ['--login'];
-  const ptyProcess = pty.spawn(shell, args, {
+    : process.env.SHELL || '/bin/zsh');
+  const resolvedArgs = shellArgs || (isWin ? [] : ['--login']);
+  const ptyProcess = pty.spawn(resolvedShell, resolvedArgs, {
     name: 'xterm-256color',
     cols: cols || 80,
     rows: rows || 24,

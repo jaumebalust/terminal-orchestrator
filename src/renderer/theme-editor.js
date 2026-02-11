@@ -216,11 +216,34 @@ const APP_CSS_VARS = {
   accent: '--accent'
 };
 
+const SHELL_PRESETS = (() => {
+  const platform = navigator.userAgent.includes('Win') ? 'win32'
+    : navigator.userAgent.includes('Mac') ? 'darwin' : 'linux';
+  if (platform === 'win32') {
+    return [
+      { label: 'Command Prompt', path: 'cmd.exe', args: [], isDefault: true },
+      { label: 'Windows PowerShell', path: 'powershell.exe', args: ['-NoLogo'] },
+      { label: 'PowerShell 7', path: 'pwsh.exe', args: ['-NoLogo'] }
+    ];
+  }
+  return [
+    { label: 'System Default', path: null, args: ['--login'], isDefault: true },
+    { label: 'zsh', path: '/bin/zsh', args: ['--login'] },
+    { label: 'bash', path: '/bin/bash', args: ['--login'] }
+  ];
+})();
+
 class ThemeEditor {
-  constructor(onThemeChange) {
+  constructor(onThemeChange, onShellChange) {
     this.onThemeChange = onThemeChange; // callback({app, terminal, presetName})
+    this.onShellChange = onShellChange; // callback({path, args} | null)
     this.panel = null;
     this.currentTheme = null;
+    this.currentShell = null; // null = system default
+  }
+
+  loadShellConfig(shellConfig) {
+    this.currentShell = shellConfig;
   }
 
   // Load theme from persisted state, returns the theme object
@@ -275,7 +298,7 @@ class ThemeEditor {
     header.className = 'theme-panel-header';
 
     const title = document.createElement('span');
-    title.textContent = 'Theme';
+    title.textContent = 'Settings';
     title.className = 'theme-panel-title';
 
     const closeBtn = document.createElement('button');
@@ -290,8 +313,97 @@ class ThemeEditor {
     const scrollArea = document.createElement('div');
     scrollArea.className = 'theme-panel-scroll';
 
-    // Presets
-    const presetsSection = this._createSection('Presets');
+    // Shell
+    const shellSection = this._createSection('Shell');
+    const shellGrid = document.createElement('div');
+    shellGrid.className = 'preset-grid';
+
+    const isCurrentDefault = !this.currentShell;
+
+    for (const preset of SHELL_PRESETS) {
+      const btn = document.createElement('button');
+      btn.className = 'preset-btn';
+      const isActive = preset.isDefault
+        ? isCurrentDefault
+        : (this.currentShell && this.currentShell.path === preset.path);
+      if (isActive) btn.classList.add('preset-active');
+      btn.textContent = preset.label;
+      btn.addEventListener('click', () => {
+        if (preset.isDefault) {
+          this.currentShell = null;
+          this.onShellChange(null);
+        } else {
+          this.currentShell = { path: preset.path, args: preset.args };
+          this.onShellChange(this.currentShell);
+        }
+        this.close();
+        this.open();
+      });
+      shellGrid.appendChild(btn);
+    }
+
+    // Custom shell button
+    const customBtn = document.createElement('button');
+    customBtn.className = 'preset-btn';
+    const isCustom = this.currentShell && !SHELL_PRESETS.some(p => p.path === this.currentShell.path);
+    if (isCustom) customBtn.classList.add('preset-active');
+    customBtn.textContent = 'Custom';
+    customBtn.addEventListener('click', () => {
+      customInput.style.display = customInput.style.display === 'none' ? 'flex' : 'none';
+      if (customInput.style.display === 'flex') customPathInput.focus();
+    });
+    shellGrid.appendChild(customBtn);
+    shellSection.appendChild(shellGrid);
+
+    // Custom shell path input
+    const customInput = document.createElement('div');
+    customInput.className = 'shell-custom-input';
+    customInput.style.display = isCustom ? 'flex' : 'none';
+
+    const customPathInput = document.createElement('input');
+    customPathInput.type = 'text';
+    customPathInput.className = 'theme-color-text';
+    customPathInput.placeholder = '/path/to/shell';
+    customPathInput.style.flex = '1';
+    if (isCustom) customPathInput.value = this.currentShell.path;
+
+    const customArgsInput = document.createElement('input');
+    customArgsInput.type = 'text';
+    customArgsInput.className = 'theme-color-text';
+    customArgsInput.placeholder = 'args (space-separated)';
+    customArgsInput.style.flex = '1';
+    if (isCustom) customArgsInput.value = (this.currentShell.args || []).join(' ');
+
+    const applyBtn = document.createElement('button');
+    applyBtn.className = 'preset-btn preset-active';
+    applyBtn.textContent = 'Apply';
+    applyBtn.style.marginTop = '0';
+    applyBtn.addEventListener('click', () => {
+      const shellPath = customPathInput.value.trim();
+      if (!shellPath) return;
+      const args = customArgsInput.value.trim()
+        ? customArgsInput.value.trim().split(/\s+/)
+        : [];
+      this.currentShell = { path: shellPath, args };
+      this.onShellChange(this.currentShell);
+      this.close();
+      this.open();
+    });
+
+    customInput.appendChild(customPathInput);
+    customInput.appendChild(customArgsInput);
+    customInput.appendChild(applyBtn);
+    shellSection.appendChild(customInput);
+
+    const shellNote = document.createElement('div');
+    shellNote.className = 'theme-section-note';
+    shellNote.textContent = 'Applies to newly opened terminals only.';
+    shellSection.appendChild(shellNote);
+
+    scrollArea.appendChild(shellSection);
+
+    // Theme Presets
+    const presetsSection = this._createSection('Theme Presets');
     const presetGrid = document.createElement('div');
     presetGrid.className = 'preset-grid';
 

@@ -600,6 +600,24 @@ html, body {
   box-shadow: 0 0 0 1px var(--accent);
 }
 
+.shell-custom-input {
+  display: flex;
+  gap: 4px;
+  margin-top: 6px;
+  align-items: center;
+}
+
+.shell-custom-input input {
+  width: auto;
+}
+
+.theme-section-note {
+  font-size: 10px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  font-style: italic;
+}
+
 .theme-color-row {
   display: flex;
   align-items: center;
