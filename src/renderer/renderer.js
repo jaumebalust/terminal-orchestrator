@@ -802,7 +802,18 @@
 
   // --- Quick switch palette ---
   function showQuickSwitchPalette() {
-    commandPalette.show(state.workspaces, state.activeWorkspaceId, (wsId) => {
+    const terminalStats = new Map();
+    for (const ws of state.workspaces) {
+      let running = 0, attention = 0;
+      for (const p of ws.projects || []) {
+        for (const t of p.terminals || []) {
+          if (t.status === 'running') running++;
+          if (t.needsAttention) attention++;
+        }
+      }
+      terminalStats.set(ws.id, { running, attention });
+    }
+    commandPalette.show(state.workspaces, state.activeWorkspaceId, terminalStats, (wsId) => {
       onSwitchWorkspace(wsId);
     });
   }

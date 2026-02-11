@@ -7,11 +7,12 @@ class CommandPalette {
     this._onKeyDown = this._handleKeyDown.bind(this);
   }
 
-  show(workspaces, activeWorkspaceId, onSelect) {
+  show(workspaces, activeWorkspaceId, terminalStats, onSelect) {
     if (this._overlay) this.hide();
     this._onSelect = onSelect;
     this._allWorkspaces = workspaces;
     this._activeWorkspaceId = activeWorkspaceId;
+    this._terminalStats = terminalStats || new Map();
     this._selectedIndex = 0;
 
     this._overlay = document.createElement('div');
@@ -104,6 +105,25 @@ class CommandPalette {
       name.textContent = ws.name;
       item.appendChild(name);
 
+      const stats = this._terminalStats.get(ws.id);
+      if (stats && (stats.running > 0 || stats.attention > 0)) {
+        const statsContainer = document.createElement('span');
+        statsContainer.className = 'command-palette-stats';
+        if (stats.running > 0) {
+          const rBadge = document.createElement('span');
+          rBadge.className = 'command-palette-stat running';
+          rBadge.textContent = `${stats.running} running`;
+          statsContainer.appendChild(rBadge);
+        }
+        if (stats.attention > 0) {
+          const aBadge = document.createElement('span');
+          aBadge.className = 'command-palette-stat attention';
+          aBadge.textContent = `${stats.attention} attention`;
+          statsContainer.appendChild(aBadge);
+        }
+        item.appendChild(statsContainer);
+      }
+
       if (ws.id === this._activeWorkspaceId) {
         const badge = document.createElement('span');
         badge.className = 'command-palette-badge';
@@ -118,7 +138,9 @@ class CommandPalette {
 
       item.addEventListener('mouseenter', () => {
         this._selectedIndex = i;
-        this._renderItems();
+        this._list.querySelectorAll('.command-palette-item').forEach((el, idx) => {
+          el.classList.toggle('selected', idx === i);
+        });
       });
 
       this._list.appendChild(item);

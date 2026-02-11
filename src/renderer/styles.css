@@ -856,6 +856,38 @@ html, body {
   flex-shrink: 0;
 }
 
+.command-palette-stats {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.command-palette-stat {
+  font-size: 11px;
+  color: var(--text-dim);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.command-palette-stat::before {
+  content: '';
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.command-palette-stat.running::before {
+  background: var(--green);
+}
+
+.command-palette-stat.attention::before {
+  background: #ffd43b;
+}
+
 .command-palette-empty {
   padding: 12px 14px;
   font-size: 12px;
