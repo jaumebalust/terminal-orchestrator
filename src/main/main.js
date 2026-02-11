@@ -1,5 +1,10 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
 const path = require('path');
+
+if (!app.isPackaged) {
+  app.setPath('userData', path.join(app.getPath('userData'), 'dev'));
+}
+
 const ptyManager = require('./pty-manager');
 const state = require('./state');
 
@@ -31,6 +36,37 @@ function createWindow() {
   mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.loadFile(path.join(__dirname, '..', 'renderer', 'index.html'));
+
+  // Close confirmation when processes are running
+  let isForceClosing = false;
+
+  mainWindow.on('close', (e) => {
+    if (isForceClosing) return;
+    e.preventDefault();
+
+    ptyManager.getRunningSet((runningIds) => {
+      if (runningIds.size === 0) {
+        isForceClosing = true;
+        mainWindow.close();
+        return;
+      }
+
+      dialog.showMessageBox(mainWindow, {
+        type: 'warning',
+        buttons: ['Close', 'Cancel'],
+        defaultId: 1,
+        cancelId: 1,
+        title: 'Close Terminal Orchestrator',
+        message: `${runningIds.size} terminal${runningIds.size > 1 ? 's have' : ' has'} running processes.`,
+        detail: 'Closing will terminate all running processes. Are you sure?'
+      }).then(({ response }) => {
+        if (response === 0) {
+          isForceClosing = true;
+          mainWindow.close();
+        }
+      });
+    });
+  });
 
   // Open devtools for debugging (remove in production)
   // mainWindow.webContents.openDevTools();

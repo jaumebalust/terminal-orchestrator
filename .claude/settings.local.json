@@ -15,7 +15,9 @@
       "Bash(ls:*)",
       "Bash(find:*)",
       "Bash(sips:*)",
-      "Bash(npx png-to-ico:*)"
+      "Bash(npx png-to-ico:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)"
     ]
   }
 }
