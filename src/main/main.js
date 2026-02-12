@@ -1,5 +1,6 @@
-const { app, BrowserWindow, ipcMain, Menu, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, dialog, shell } = require('electron');
 const path = require('path');
+const { exec } = require('child_process');
 
 if (!app.isPackaged) {
   app.setPath('userData', path.join(app.getPath('userData'), 'dev'));
@@ -156,6 +157,17 @@ ipcMain.on('pty:kill', (event, { terminalId }) => {
 
 ipcMain.handle('pty:getCwd', (event, { terminalId }) => {
   return ptyManager.getCwd(terminalId);
+});
+
+ipcMain.handle('shell:openInEditor', (event, { folderPath }) => {
+  const cmd = process.platform === 'win32' ? `code.cmd "${folderPath}"` : `code "${folderPath}"`;
+  exec(cmd, (err) => {
+    if (err) console.error('Failed to open editor:', err.message);
+  });
+});
+
+ipcMain.handle('shell:openInFileManager', (event, { folderPath }) => {
+  shell.openPath(folderPath);
 });
 
 ipcMain.handle('state:load', () => {

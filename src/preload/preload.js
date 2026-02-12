@@ -47,6 +47,10 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('shortcut:undo-delete-terminal', listener);
   },
 
+  // Shell actions
+  openInEditor: (folderPath) => ipcRenderer.invoke('shell:openInEditor', { folderPath }),
+  openInFileManager: (folderPath) => ipcRenderer.invoke('shell:openInFileManager', { folderPath }),
+
   // State
   loadState: () => ipcRenderer.invoke('state:load'),
   saveState: (state) => ipcRenderer.invoke('state:save', state)

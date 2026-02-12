@@ -268,6 +268,23 @@ html, body {
   min-width: 0;
 }
 
+.terminal-action-icon {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  padding: 1px 2px;
+  line-height: 1;
+  border-radius: 3px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+}
+
+.terminal-action-icon:hover {
+  color: var(--accent);
+}
+
 .pencil-btn {
   background: none;
   border: none;

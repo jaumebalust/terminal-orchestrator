@@ -90,7 +90,9 @@
     onRenameWorkspace,
     onDeleteWorkspace,
     onChangeWorkspaceColor,
-    onResolvePath
+    onResolvePath,
+    onOpenInEditor,
+    onOpenInFileManager
   });
 
   // --- Modal prompt (Electron doesn't support window.prompt) ---
@@ -739,6 +741,16 @@
       // ignore
     }
     return (found && found.terminal.cwd) || fallbackCwd || null;
+  }
+
+  async function onOpenInEditor(terminalId, fallbackCwd) {
+    const cwd = await onResolvePath(terminalId, fallbackCwd);
+    if (cwd) window.api.openInEditor(cwd);
+  }
+
+  async function onOpenInFileManager(terminalId, fallbackCwd) {
+    const cwd = await onResolvePath(terminalId, fallbackCwd);
+    if (cwd) window.api.openInFileManager(cwd);
   }
 
   function onDeleteWorkspace(wsId) {

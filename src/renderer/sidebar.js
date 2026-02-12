@@ -435,8 +435,32 @@ class Sidebar {
       this._startRenameTerminal(nameEl, terminal, project);
     });
 
+    const editorBtn = document.createElement('button');
+    editorBtn.className = 'terminal-action-icon';
+    editorBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 3 1 6 4 9"/><polyline points="12 3 15 6 12 9"/><line x1="10" y1="2" x2="6" y2="10"/></svg>';
+    editorBtn.title = 'Open in VS Code';
+    editorBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.callbacks.onOpenInEditor) {
+        this.callbacks.onOpenInEditor(terminal.id, project.cwd);
+      }
+    });
+
+    const fileManagerBtn = document.createElement('button');
+    fileManagerBtn.className = 'terminal-action-icon';
+    fileManagerBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h5l2 2h7v8H1V3z"/></svg>';
+    fileManagerBtn.title = 'Open in File Manager';
+    fileManagerBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.callbacks.onOpenInFileManager) {
+        this.callbacks.onOpenInFileManager(terminal.id, project.cwd);
+      }
+    });
+
     topRow.appendChild(statusDot);
     topRow.appendChild(nameEl);
+    topRow.appendChild(editorBtn);
+    topRow.appendChild(fileManagerBtn);
     topRow.appendChild(pencilBtn);
 
     // Last command text

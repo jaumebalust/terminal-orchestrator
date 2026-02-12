@@ -78,8 +78,25 @@ class CommandPalette {
     this._filtered = this._allWorkspaces.filter((ws) =>
       !query || ws.name.toLowerCase().includes(query)
     );
-    this._selectedIndex = Math.min(this._selectedIndex, Math.max(0, this._filtered.length - 1));
+    this._selectedIndex = this._bestDefaultIndex();
     this._renderItems();
+  }
+
+  _bestDefaultIndex() {
+    if (this._filtered.length === 0) return 0;
+    let bestIdx = 0;
+    let bestRunning = -1;
+    for (let i = 0; i < this._filtered.length; i++) {
+      const ws = this._filtered[i];
+      if (ws.id === this._activeWorkspaceId) continue;
+      const stats = this._terminalStats.get(ws.id);
+      const running = stats ? stats.running : 0;
+      if (running > bestRunning) {
+        bestRunning = running;
+        bestIdx = i;
+      }
+    }
+    return bestIdx;
   }
 
   _renderItems() {
@@ -134,13 +151,6 @@ class CommandPalette {
       item.addEventListener('click', () => {
         this.hide();
         if (this._onSelect) this._onSelect(ws.id);
-      });
-
-      item.addEventListener('mouseenter', () => {
-        this._selectedIndex = i;
-        this._list.querySelectorAll('.command-palette-item').forEach((el, idx) => {
-          el.classList.toggle('selected', idx === i);
-        });
       });
 
       this._list.appendChild(item);
