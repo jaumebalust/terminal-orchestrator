@@ -6,7 +6,8 @@
   const commandBuffers = new Map(); // terminalId -> string
   const exitCleanups = new Map();   // terminalId -> cleanup function
   const prefilledTerminals = new Set(); // terminals that have lastCommand pre-filled at prompt
-  const spawnTimestamps = new Map(); // terminalId -> Date.now() (for BEL grace period)
+  const terminalReady = new Set();      // terminals that have finished shell init (quiescent)
+  const quiescenceTimers = new Map();   // terminalId -> setTimeout id for output quiescence
 
   // --- DOM ---
   const sidebarEl = document.getElementById('sidebar');
@@ -277,13 +278,21 @@
 
     // Command buffer for tracking
     commandBuffers.set(terminalId, '');
-    spawnTimestamps.set(terminalId, Date.now());
 
     // Listen for BEL character in PTY output (attention detection for non-active terminals)
+    // Also track output quiescence: once 1s of silence passes after spawn, mark terminal as ready
     const removeBelListener = window.api.onPtyData(terminalId, (data) => {
+      // Reset quiescence timer on every output chunk until terminal is marked ready
+      if (!terminalReady.has(terminalId)) {
+        clearTimeout(quiescenceTimers.get(terminalId));
+        quiescenceTimers.set(terminalId, setTimeout(() => {
+          terminalReady.add(terminalId);
+          quiescenceTimers.delete(terminalId);
+        }, 1000));
+      }
+
       if (data.includes('\x07') && terminalId !== state.activeTerminalId) {
-        const spawnTime = spawnTimestamps.get(terminalId) || 0;
-        if (Date.now() - spawnTime > 5000) {
+        if (terminalReady.has(terminalId)) {
           const f = findTerminalAcrossProjects(terminalId);
           if (f && !f.terminal.needsAttention) {
             f.terminal.needsAttention = true;
@@ -878,13 +887,11 @@
       }
     }
 
-    // Reset spawn timestamps and attention flags so shell startup BELs are ignored
-    const now = Date.now();
+    // Clear attention flags on startup (quiescence detection handles BEL suppression)
     for (const workspace of state.workspaces) {
       for (const project of workspace.projects) {
         for (const terminal of project.terminals) {
           terminal.needsAttention = false;
-          spawnTimestamps.set(terminal.id, now);
         }
       }
     }
