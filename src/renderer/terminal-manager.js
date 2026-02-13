@@ -72,6 +72,20 @@ class TerminalManager {
 
     const cleanup = [];
 
+    // Windows: Ctrl+C with selection = copy, without selection = SIGINT
+    if (process.platform === 'win32') {
+      xterm.attachCustomKeyEventHandler((event) => {
+        if (event.ctrlKey && event.key === 'c' && event.type === 'keydown') {
+          if (xterm.hasSelection()) {
+            navigator.clipboard.writeText(xterm.getSelection());
+            xterm.clearSelection();
+            return false; // prevent \x03 from reaching PTY
+          }
+        }
+        return true;
+      });
+    }
+
     // Wire input to PTY
     const disposeOnData = xterm.onData((data) => {
       window.api.writePty(terminalId, data);
