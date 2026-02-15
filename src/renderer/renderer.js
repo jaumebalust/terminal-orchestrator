@@ -937,4 +937,25 @@
   });
 
   init();
+
+  // Post-init sweep: after 30s, normalize terminals that aren't running
+  // to 'stopped' and clear needsAttention. This catches cases where
+  // shell startup scripts cause false states during initialization.
+  setTimeout(() => {
+    let changed = false;
+    for (const workspace of state.workspaces) {
+      for (const project of workspace.projects) {
+        for (const terminal of project.terminals) {
+          if (terminal.status !== 'running') {
+            if (terminal.status !== 'stopped' || terminal.needsAttention) {
+              terminal.status = 'stopped';
+              terminal.needsAttention = false;
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+    if (changed) persist();
+  }, 30000);
 })();
