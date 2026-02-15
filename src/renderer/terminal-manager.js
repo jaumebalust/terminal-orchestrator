@@ -5,7 +5,11 @@ class TerminalManager {
     this.container = containerEl;
     this.terminals = new Map(); // terminalId -> { xterm, fitAddon, cleanup[] }
     this.activeTerminalId = null;
-    this._resizeObserver = new ResizeObserver(() => this.fitActive());
+    this._resizeDebounce = null;
+    this._resizeObserver = new ResizeObserver(() => {
+      clearTimeout(this._resizeDebounce);
+      this._resizeDebounce = setTimeout(() => this.fitActive(), 50);
+    });
     this._resizeObserver.observe(this.container);
   }
 
@@ -73,7 +77,7 @@ class TerminalManager {
     const cleanup = [];
 
     // Windows: Ctrl+C with selection = copy, without selection = SIGINT
-    if (process.platform === 'win32') {
+    if (window.api.platform === 'win32') {
       xterm.attachCustomKeyEventHandler((event) => {
         if (event.ctrlKey && event.key === 'c' && event.type === 'keydown') {
           if (xterm.hasSelection()) {
@@ -92,11 +96,24 @@ class TerminalManager {
     });
     cleanup.push(() => disposeOnData.dispose());
 
-    // Wire PTY output to terminal
+    // Wire PTY output to terminal (buffered to coalesce rapid TUI redraws)
+    let pendingData = [];
+    let writeRaf = null;
     const removePtyData = window.api.onPtyData(terminalId, (data) => {
-      xterm.write(data);
+      pendingData.push(data);
+      if (writeRaf === null) {
+        writeRaf = requestAnimationFrame(() => {
+          const batch = pendingData.join('');
+          pendingData = [];
+          writeRaf = null;
+          xterm.write(batch);
+        });
+      }
     });
-    cleanup.push(removePtyData);
+    cleanup.push(() => {
+      removePtyData();
+      if (writeRaf !== null) cancelAnimationFrame(writeRaf);
+    });
 
     this.terminals.set(terminalId, { xterm, fitAddon, wrapper, cleanup });
     return xterm;
@@ -138,10 +155,19 @@ class TerminalManager {
     const entry = this.terminals.get(this.activeTerminalId);
     if (entry && entry.wrapper.style.display !== 'none') {
       try {
+        // Track if viewport was at the bottom before reflow
+        const buf = entry.xterm.buffer.active;
+        const wasAtBottom = buf.viewportY >= buf.baseY;
+
         entry.fitAddon.fit();
         const dims = entry.fitAddon.proposeDimensions();
         if (dims) {
           window.api.resizePty(this.activeTerminalId, dims.cols, dims.rows);
+        }
+
+        // Restore bottom position so auto-scroll keeps working
+        if (wasAtBottom) {
+          entry.xterm.scrollToBottom();
         }
       } catch (err) {
         // ignore

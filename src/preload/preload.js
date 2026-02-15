@@ -1,6 +1,8 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('api', {
+  platform: process.platform,
+
   // PTY
   spawnPty: (opts) => ipcRenderer.invoke('pty:spawn', opts),
   writePty: (terminalId, data) => ipcRenderer.send('pty:write', { terminalId, data }),

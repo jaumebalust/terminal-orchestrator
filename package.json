@@ -1,10 +1,11 @@
 {
   "name": "orchestrator-terminal",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "description": "Terminal Orchestrator - Multi-project terminal workspace",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
+    "test": "node --test 'test/**/*.test.js'",
     "rebuild": "@electron/rebuild",
     "dist": "electron-builder --mac",
     "dist:arm": "electron-builder --mac --arm64",

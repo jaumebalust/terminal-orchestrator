@@ -504,7 +504,7 @@ html, body {
 }
 
 .terminal-wrapper .xterm-viewport {
-  overflow-y: auto;
+  overflow-y: scroll;
 }
 
 /* Scrollbar styling */
