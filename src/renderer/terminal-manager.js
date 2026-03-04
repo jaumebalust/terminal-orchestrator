@@ -201,6 +201,28 @@ class TerminalManager {
     }
   }
 
+  pauseResizeObserver() {
+    this._resizeObserver.disconnect();
+  }
+
+  resumeResizeObserver() {
+    this._resizeObserver.observe(this.container);
+  }
+
+  fitTerminal(terminalId) {
+    const entry = this.terminals.get(terminalId);
+    if (!entry || entry.wrapper.style.display === 'none') return;
+    try {
+      entry.fitAddon.fit();
+      const dims = entry.fitAddon.proposeDimensions();
+      if (dims) {
+        window.api.resizePty(terminalId, dims.cols, dims.rows);
+      }
+    } catch (err) {
+      // ignore
+    }
+  }
+
   destroy(terminalId) {
     const entry = this.terminals.get(terminalId);
     if (entry) {

@@ -1,4 +1,4 @@
-/* global Sidebar, TerminalManager, CommandPalette */
+/* global Sidebar, TerminalManager, CommandPalette, GridView */
 
 (async function () {
   // --- State ---
@@ -52,6 +52,21 @@
   // --- Managers ---
   const terminalManager = new TerminalManager(terminalContainer);
   const commandPalette = new CommandPalette();
+  const gridView = new GridView(terminalContainer, terminalManager, {
+    getState: () => state,
+    onFocusTerminal: (terminalId) => {
+      const found = findTerminalAcrossProjects(terminalId);
+      if (found) {
+        state.activeWorkspaceId = found.workspace.id;
+        state.activeProjectId = found.project.id;
+        state.activeTerminalId = terminalId;
+        if (found.terminal.needsAttention) {
+          found.terminal.needsAttention = false;
+        }
+        persist();
+      }
+    }
+  }, { sidebarEl, resizeHandleEl: resizeHandle });
 
   // --- Theme Editor ---
   const themeEditor = new ThemeEditor(
@@ -93,7 +108,16 @@
     onChangeWorkspaceColor,
     onResolvePath,
     onOpenInEditor,
-    onOpenInFileManager
+    onOpenInFileManager,
+    isTerminalHiddenFromGrid: (terminalId) => gridView.isHidden(terminalId),
+    onToggleGridTerminal: (terminalId) => {
+      if (gridView.isHidden(terminalId)) {
+        gridView.showInGrid(terminalId);
+      } else {
+        gridView.hideFromGrid(terminalId);
+      }
+      persist();
+    }
   });
 
   // --- Modal prompt (Electron doesn't support window.prompt) ---
@@ -396,6 +420,9 @@
 
   // --- Callbacks ---
   function onSelectTerminal(projectId, terminalId) {
+    // Deactivate grid view if active
+    if (gridView.active) gridView.deactivate();
+
     // Save cwd of terminal we're leaving
     syncActiveCwd();
 
@@ -467,7 +494,11 @@
     state.activeTerminalId = terminal.id;
 
     await spawnTerminal(terminal.id, cwd);
-    terminalManager.show(terminal.id);
+    if (gridView.active) {
+      gridView.refresh();
+    } else {
+      terminalManager.show(terminal.id);
+    }
     persist();
   }
 
@@ -593,7 +624,9 @@
 
     project.terminals = project.terminals.filter((t) => t.id !== terminalId);
 
-    if (state.activeTerminalId === terminalId) {
+    if (gridView.active) {
+      gridView.refresh();
+    } else if (state.activeTerminalId === terminalId) {
       state.activeTerminalId = null;
       // Switch to another terminal in the project
       if (project.terminals.length > 0) {
@@ -934,6 +967,10 @@
 
   window.api.onUndoDeleteTerminalShortcut(() => {
     onUndoDeleteTerminal();
+  });
+
+  window.api.onToggleGridShortcut(() => {
+    gridView.toggle();
   });
 
   init();

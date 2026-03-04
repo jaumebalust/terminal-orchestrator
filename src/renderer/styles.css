@@ -929,3 +929,106 @@ html, body {
   color: var(--text-dim);
   text-align: center;
 }
+
+/* --- Grid View --- */
+#terminal-container.grid-mode {
+  display: grid;
+}
+
+#terminal-container.grid-mode .terminal-wrapper {
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  overflow: hidden;
+  min-width: 0;
+  min-height: 0;
+}
+
+#terminal-container.grid-mode .terminal-wrapper.grid-focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.grid-cell-label {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  background: rgba(22, 22, 42, 0.85);
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.grid-cell-label-text {
+  flex: 1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  pointer-events: none;
+}
+
+.grid-cell-close {
+  background: none;
+  border: none;
+  color: var(--text-dim);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 2px;
+  line-height: 1;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+
+.grid-cell-close:hover {
+  color: var(--red);
+  background: rgba(255, 107, 107, 0.15);
+}
+
+.grid-handle-col {
+  cursor: col-resize;
+  background: var(--border-color);
+  z-index: 5;
+}
+
+.grid-handle-row {
+  cursor: row-resize;
+  background: var(--border-color);
+  z-index: 5;
+}
+
+.grid-handle-col:hover,
+.grid-handle-row:hover {
+  background: var(--accent);
+}
+
+/* Grid toggle button in sidebar */
+.grid-toggle-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.terminal-item:hover .grid-toggle-btn {
+  opacity: 1;
+}
+
+.grid-toggle-btn.grid-hidden {
+  opacity: 0.4;
+}
+
+.terminal-item:hover .grid-toggle-btn.grid-hidden {
+  opacity: 1;
+}
+
+.grid-toggle-btn.grid-hidden svg rect {
+  stroke-dasharray: 2 2;
+}

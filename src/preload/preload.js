@@ -49,6 +49,12 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('shortcut:undo-delete-terminal', listener);
   },
 
+  onToggleGridShortcut: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('shortcut:toggle-grid', listener);
+    return () => ipcRenderer.removeListener('shortcut:toggle-grid', listener);
+  },
+
   // Shell actions
   openInEditor: (folderPath) => ipcRenderer.invoke('shell:openInEditor', { folderPath }),
   openInFileManager: (folderPath) => ipcRenderer.invoke('shell:openInFileManager', { folderPath }),

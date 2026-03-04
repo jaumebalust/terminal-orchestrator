@@ -457,8 +457,27 @@ class Sidebar {
       }
     });
 
+    // Grid visibility toggle button
+    const gridBtn = document.createElement('button');
+    gridBtn.className = 'terminal-action-icon grid-toggle-btn';
+    const isHidden = this.callbacks.isTerminalHiddenFromGrid && this.callbacks.isTerminalHiddenFromGrid(terminal.id);
+    gridBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="1" width="6" height="6"/><rect x="9" y="1" width="6" height="6"/><rect x="1" y="9" width="6" height="6"/><rect x="9" y="9" width="6" height="6"/></svg>';
+    if (isHidden) {
+      gridBtn.classList.add('grid-hidden');
+      gridBtn.title = 'Show in grid view';
+    } else {
+      gridBtn.title = 'Hide from grid view';
+    }
+    gridBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (this.callbacks.onToggleGridTerminal) {
+        this.callbacks.onToggleGridTerminal(terminal.id);
+      }
+    });
+
     topRow.appendChild(statusDot);
     topRow.appendChild(nameEl);
+    topRow.appendChild(gridBtn);
     topRow.appendChild(editorBtn);
     topRow.appendChild(fileManagerBtn);
     topRow.appendChild(pencilBtn);

@@ -106,6 +106,16 @@ function buildAppMenu() {
         },
         { type: 'separator' },
         {
+          label: 'Toggle Grid View',
+          accelerator: 'CmdOrCtrl+E',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('shortcut:toggle-grid');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Undo Delete Terminal',
           accelerator: 'CmdOrCtrl+Shift+T',
           click: () => {
