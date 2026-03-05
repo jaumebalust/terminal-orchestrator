@@ -8,6 +8,7 @@
   const prefilledTerminals = new Set(); // terminals that have lastCommand pre-filled at prompt
   const terminalReady = new Set();      // terminals that have finished shell init (quiescent)
   const quiescenceTimers = new Map();   // terminalId -> setTimeout id for output quiescence
+  const phantomTerminals = new Map();   // terminalId -> { id, name, cwd, workspaceName, workspaceColor }
 
   // --- DOM ---
   const sidebarEl = document.getElementById('sidebar');
@@ -54,7 +55,13 @@
   const commandPalette = new CommandPalette();
   const gridView = new GridView(terminalContainer, terminalManager, {
     getState: () => state,
+    getPhantoms: () => phantomTerminals,
     onFocusTerminal: (terminalId) => {
+      if (phantomTerminals.has(terminalId)) {
+        state.activeTerminalId = terminalId;
+        sidebar.setState(state, phantomTerminals);
+        return;
+      }
       const found = findTerminalAcrossProjects(terminalId);
       if (found) {
         state.activeWorkspaceId = found.workspace.id;
@@ -65,6 +72,9 @@
         }
         persist();
       }
+    },
+    onOpenInFileManager: (terminalId, fallbackCwd) => {
+      onOpenInFileManager(terminalId, fallbackCwd);
     }
   }, { sidebarEl, resizeHandleEl: resizeHandle });
 
@@ -117,6 +127,15 @@
         gridView.hideFromGrid(terminalId);
       }
       persist();
+    },
+    onSelectPhantom: (terminalId) => {
+      if (gridView.active) gridView.deactivate();
+      state.activeTerminalId = terminalId;
+      terminalManager.show(terminalId);
+      sidebar.setState(state, phantomTerminals);
+    },
+    onClosePhantom: (terminalId) => {
+      closePhantom(terminalId);
     }
   });
 
@@ -270,7 +289,7 @@
 
   function persist(skipRender) {
     window.api.saveState(state);
-    if (!skipRender) sidebar.setState(state);
+    if (!skipRender) sidebar.setState(state, phantomTerminals);
   }
 
   // --- PTY spawning ---
@@ -864,6 +883,99 @@
     persist();
   }
 
+  // --- Phantom (scratch) terminals ---
+  let phantomCounter = 0;
+
+  async function onNewPhantom() {
+    // Resolve cwd from the currently active terminal
+    let cwd = null;
+    if (state.activeTerminalId) {
+      try {
+        cwd = await window.api.getCwd(state.activeTerminalId);
+      } catch { /* ignore */ }
+      if (!cwd) {
+        const found = findTerminalAcrossProjects(state.activeTerminalId);
+        if (found) cwd = found.terminal.cwd || found.project.cwd;
+      }
+    }
+
+    // Get workspace context for display
+    const ws = getActiveWorkspace();
+    const wsName = ws ? ws.name : 'Scratch';
+    const wsColor = (ws && ws.color) || '#4a6fa5';
+
+    phantomCounter++;
+    const terminalId = `phantom-${generateId()}`;
+    const phantom = {
+      id: terminalId,
+      name: `Scratch ${phantomCounter}`,
+      cwd: cwd || null,
+      workspaceName: wsName,
+      workspaceColor: wsColor
+    };
+    phantomTerminals.set(terminalId, phantom);
+
+    // Spawn the xterm + PTY
+    const xterm = terminalManager.create(terminalId);
+    const dims = terminalManager.getDimensions(terminalId) || { cols: 80, rows: 24 };
+    const shellConfig = state.defaultShell || null;
+    await window.api.spawnPty({
+      terminalId,
+      cwd: cwd || undefined,
+      cols: dims.cols,
+      rows: dims.rows,
+      shell: shellConfig ? shellConfig.path : undefined,
+      shellArgs: shellConfig ? shellConfig.args : undefined
+    });
+
+    // Listen for exit
+    const removeExit = window.api.onPtyExit(terminalId, () => {
+      closePhantom(terminalId);
+    });
+    exitCleanups.set(terminalId, () => {
+      removeExit();
+    });
+
+    // Show in current view
+    if (gridView.active) {
+      gridView.refresh();
+    } else {
+      terminalManager.show(terminalId);
+    }
+    state.activeTerminalId = terminalId;
+    sidebar.setState(state);
+  }
+
+  function closePhantom(terminalId) {
+    if (!phantomTerminals.has(terminalId)) return;
+    window.api.killPty(terminalId);
+    const cleanup = exitCleanups.get(terminalId);
+    if (cleanup) cleanup();
+    exitCleanups.delete(terminalId);
+    terminalManager.destroy(terminalId);
+    phantomTerminals.delete(terminalId);
+
+    // If we were viewing this phantom, switch back
+    if (state.activeTerminalId === terminalId) {
+      state.activeTerminalId = null;
+      // Find a real terminal to show
+      const ws = getActiveWorkspace();
+      if (ws) {
+        for (const p of ws.projects) {
+          if (p.terminals.length > 0) {
+            state.activeProjectId = p.id;
+            state.activeTerminalId = p.terminals[0].id;
+            terminalManager.show(state.activeTerminalId);
+            break;
+          }
+        }
+      }
+    }
+
+    if (gridView.active) gridView.refresh();
+    sidebar.setState(state);
+  }
+
   // --- Quick switch palette ---
   function showQuickSwitchPalette() {
     const terminalStats = new Map();
@@ -971,6 +1083,10 @@
 
   window.api.onToggleGridShortcut(() => {
     gridView.toggle();
+  });
+
+  window.api.onNewPhantomShortcut(() => {
+    onNewPhantom();
   });
 
   init();

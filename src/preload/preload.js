@@ -55,6 +55,12 @@ contextBridge.exposeInMainWorld('api', {
     return () => ipcRenderer.removeListener('shortcut:toggle-grid', listener);
   },
 
+  onNewPhantomShortcut: (callback) => {
+    const listener = () => callback();
+    ipcRenderer.on('shortcut:new-phantom', listener);
+    return () => ipcRenderer.removeListener('shortcut:new-phantom', listener);
+  },
+
   // Shell actions
   openInEditor: (folderPath) => ipcRenderer.invoke('shell:openInEditor', { folderPath }),
   openInFileManager: (folderPath) => ipcRenderer.invoke('shell:openInFileManager', { folderPath }),

@@ -5,8 +5,14 @@ class Sidebar {
     this.state = { workspaces: [], activeWorkspaceId: null, activeProjectId: null, activeTerminalId: null };
   }
 
-  setState(state) {
+  setState(state, phantoms) {
     this.state = state;
+    this._phantoms = phantoms || this._phantoms || new Map();
+    this.render();
+  }
+
+  setPhantoms(phantoms) {
+    this._phantoms = phantoms;
     this.render();
   }
 
@@ -89,6 +95,57 @@ class Sidebar {
     }
 
     this.container.appendChild(list);
+
+    // Phantom (scratch) terminals section
+    if (this._phantoms && this._phantoms.size > 0) {
+      const phantomHeader = document.createElement('div');
+      phantomHeader.className = 'sidebar-header';
+
+      const phantomTitle = document.createElement('span');
+      phantomTitle.className = 'sidebar-title';
+      phantomTitle.textContent = 'SCRATCH';
+
+      phantomHeader.appendChild(phantomTitle);
+      this.container.appendChild(phantomHeader);
+
+      const phantomList = document.createElement('div');
+      phantomList.className = 'sidebar-list phantom-list';
+
+      for (const [, phantom] of this._phantoms) {
+        const item = document.createElement('div');
+        item.className = 'terminal-item phantom-terminal';
+        if (this.state.activeTerminalId === phantom.id) {
+          item.classList.add('active');
+        }
+        item.addEventListener('click', () => {
+          if (this.callbacks.onSelectPhantom) {
+            this.callbacks.onSelectPhantom(phantom.id);
+          }
+        });
+
+        const nameEl = document.createElement('span');
+        nameEl.className = 'terminal-name';
+        nameEl.textContent = phantom.name;
+
+        const closeBtn = document.createElement('button');
+        closeBtn.className = 'terminal-action-icon phantom-close';
+        closeBtn.innerHTML = '&times;';
+        closeBtn.title = 'Close scratch terminal';
+        closeBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          if (this.callbacks.onClosePhantom) {
+            this.callbacks.onClosePhantom(phantom.id);
+          }
+        });
+
+        item.appendChild(nameEl);
+        item.appendChild(closeBtn);
+        phantomList.appendChild(item);
+      }
+
+      this.container.appendChild(phantomList);
+    }
+
     list.scrollTop = scrollTop;
   }
 

@@ -4,7 +4,7 @@ class GridView {
   /**
    * @param {HTMLElement} containerEl - #terminal-container
    * @param {TerminalManager} terminalManager
-   * @param {{ getState: () => object, onFocusTerminal: (terminalId: string) => void }} callbacks
+   * @param {{ getState: () => object, onFocusTerminal: (terminalId: string) => void, onOpenInFileManager: (terminalId: string, fallbackCwd: string|null) => void }} callbacks
    * @param {{ sidebarEl: HTMLElement, resizeHandleEl: HTMLElement }} uiRefs
    */
   constructor(containerEl, terminalManager, callbacks, uiRefs) {
@@ -86,10 +86,29 @@ class GridView {
             this.cellOrder.push({
               terminalId: terminal.id,
               workspaceName: ws.name,
+              workspaceColor: ws.color || '#4a6fa5',
               projectName: project.name,
+              projectCwd: project.cwd || null,
               terminalName: terminal.name
             });
           }
+        }
+      }
+    }
+
+    // Include phantom (scratch) terminals
+    if (this.callbacks.getPhantoms) {
+      for (const [, phantom] of this.callbacks.getPhantoms()) {
+        if (this.terminalManager.terminals.has(phantom.id) && !this.hiddenTerminals.has(phantom.id)) {
+          this.cellOrder.push({
+            terminalId: phantom.id,
+            workspaceName: phantom.workspaceName,
+            workspaceColor: phantom.workspaceColor,
+            projectName: 'Scratch',
+            projectCwd: phantom.cwd,
+            terminalName: phantom.name,
+            isPhantom: true
+          });
         }
       }
     }
@@ -130,6 +149,9 @@ class GridView {
       wrapper.style.gridColumn = String(col * 2 + 1);
       wrapper.style.gridRow = String(row * 2 + 1);
     }
+
+    // Apply workspace color tint to cell backgrounds
+    this._applyTints();
 
     // Create resize handles and labels
     this._createHandles();
@@ -178,6 +200,10 @@ class GridView {
       entry.wrapper.style.gridColumn = '';
       entry.wrapper.style.gridRow = '';
       entry.wrapper.style.display = 'none';
+      entry.wrapper.style.borderColor = '';
+      entry.wrapper.style.boxShadow = '';
+      entry.wrapper.style.background = '';
+      delete entry.wrapper.dataset.wsColor;
       entry.wrapper.classList.remove('grid-focused');
     }
 
@@ -222,10 +248,29 @@ class GridView {
             this.cellOrder.push({
               terminalId: terminal.id,
               workspaceName: ws.name,
+              workspaceColor: ws.color || '#4a6fa5',
               projectName: project.name,
+              projectCwd: project.cwd || null,
               terminalName: terminal.name
             });
           }
+        }
+      }
+    }
+
+    // Include phantom (scratch) terminals
+    if (this.callbacks.getPhantoms) {
+      for (const [, phantom] of this.callbacks.getPhantoms()) {
+        if (this.terminalManager.terminals.has(phantom.id) && !this.hiddenTerminals.has(phantom.id)) {
+          this.cellOrder.push({
+            terminalId: phantom.id,
+            workspaceName: phantom.workspaceName,
+            workspaceColor: phantom.workspaceColor,
+            projectName: 'Scratch',
+            projectCwd: phantom.cwd,
+            terminalName: phantom.name,
+            isPhantom: true
+          });
         }
       }
     }
@@ -280,6 +325,7 @@ class GridView {
     }
 
     this._applyGridTemplate();
+    this._applyTints();
 
     // Fix focus if the focused terminal was removed
     if (this.focusedTerminalId && !this.cellOrder.find(c => c.terminalId === this.focusedTerminalId)) {
@@ -288,6 +334,24 @@ class GridView {
     this._highlightFocused();
 
     requestAnimationFrame(() => this._fitAll());
+  }
+
+  _luminance(hex) {
+    const h = (hex || '#4a6fa5').replace('#', '');
+    const r = parseInt(h.substring(0, 2), 16) / 255;
+    const g = parseInt(h.substring(2, 4), 16) / 255;
+    const b = parseInt(h.substring(4, 6), 16) / 255;
+    const toLinear = (c) => c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+    return 0.2126 * toLinear(r) + 0.7152 * toLinear(g) + 0.0722 * toLinear(b);
+  }
+
+  _contrastText(bgHex) {
+    return this._luminance(bgHex) > 0.4 ? '#1a1a2e' : '#ffffff';
+  }
+
+  _hexToRgb(hex) {
+    const h = (hex || '#4a6fa5').replace('#', '');
+    return `${parseInt(h.substring(0, 2), 16)}, ${parseInt(h.substring(2, 4), 16)}, ${parseInt(h.substring(4, 6), 16)}`;
   }
 
   _fitAll() {
@@ -347,15 +411,34 @@ class GridView {
       const entry = this.terminalManager.terminals.get(cell.terminalId);
       if (!entry) continue;
 
+      const wsColor = cell.workspaceColor;
+      const textColor = this._contrastText(wsColor);
+
       const label = document.createElement('div');
       label.className = 'grid-cell-label';
+      label.style.background = wsColor;
+      label.style.color = textColor;
 
       const labelText = document.createElement('span');
       labelText.className = 'grid-cell-label-text';
       labelText.textContent = `${cell.workspaceName} > ${cell.projectName} > ${cell.terminalName}`;
 
+      const folderBtn = document.createElement('button');
+      folderBtn.className = 'grid-cell-action';
+      folderBtn.style.color = textColor;
+      folderBtn.innerHTML = '<svg width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M1 3h5l2 2h7v8H1V3z"/></svg>';
+      folderBtn.title = 'Open in Finder';
+      folderBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (this.callbacks.onOpenInFileManager) {
+          this.callbacks.onOpenInFileManager(cell.terminalId, cell.projectCwd);
+        }
+      });
+
       const closeBtn = document.createElement('button');
       closeBtn.className = 'grid-cell-close';
+      closeBtn.style.color = textColor;
       closeBtn.innerHTML = '&times;';
       closeBtn.title = 'Remove from grid';
       closeBtn.addEventListener('click', (e) => {
@@ -365,6 +448,7 @@ class GridView {
       });
 
       label.appendChild(labelText);
+      label.appendChild(folderBtn);
       label.appendChild(closeBtn);
       entry.wrapper.appendChild(label);
       this.labelElements.push(label);
@@ -386,6 +470,7 @@ class GridView {
       const handler = (e) => {
         if (e.target.closest('.xterm-viewport')) return;
         if (e.target.closest('.grid-cell-close')) return;
+        if (e.target.closest('.grid-cell-action')) return;
         this.focusedTerminalId = cell.terminalId;
         this._highlightFocused();
         entry.xterm.focus();
@@ -404,12 +489,31 @@ class GridView {
     this._focusListeners = [];
   }
 
+  _applyTints() {
+    for (const cell of this.cellOrder) {
+      const entry = this.terminalManager.terminals.get(cell.terminalId);
+      if (!entry) continue;
+      const rgb = this._hexToRgb(cell.workspaceColor);
+      entry.wrapper.style.background = `rgba(${rgb}, 0.08)`;
+      entry.wrapper.dataset.wsColor = cell.workspaceColor;
+    }
+  }
+
   _highlightFocused() {
-    for (const [id, entry] of this.terminalManager.terminals) {
-      if (id === this.focusedTerminalId) {
+    for (const cell of this.cellOrder) {
+      const entry = this.terminalManager.terminals.get(cell.terminalId);
+      if (!entry) continue;
+      const rgb = this._hexToRgb(cell.workspaceColor);
+      if (cell.terminalId === this.focusedTerminalId) {
         entry.wrapper.classList.add('grid-focused');
+        entry.wrapper.style.borderColor = cell.workspaceColor;
+        entry.wrapper.style.boxShadow = `0 0 0 2px ${cell.workspaceColor}, inset 0 0 0 1px rgba(${rgb}, 0.3)`;
+        entry.wrapper.style.background = `rgba(${rgb}, 0.15)`;
       } else {
         entry.wrapper.classList.remove('grid-focused');
+        entry.wrapper.style.borderColor = '';
+        entry.wrapper.style.boxShadow = '';
+        entry.wrapper.style.background = `rgba(${rgb}, 0.08)`;
       }
     }
   }

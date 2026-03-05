@@ -116,6 +116,16 @@ function buildAppMenu() {
         },
         { type: 'separator' },
         {
+          label: 'New Scratch Terminal',
+          accelerator: 'CmdOrCtrl+T',
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('shortcut:new-phantom');
+            }
+          }
+        },
+        { type: 'separator' },
+        {
           label: 'Undo Delete Terminal',
           accelerator: 'CmdOrCtrl+Shift+T',
           click: () => {
