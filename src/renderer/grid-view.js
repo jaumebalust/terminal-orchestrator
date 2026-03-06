@@ -33,6 +33,9 @@ class GridView {
     this._resizeDebounce = null;
     this._dragFitDebounce = null;
     this._focusListeners = [];
+    this._userOrder = [];
+    this._dragListeners = [];
+    this._dragSourceId = null;
   }
 
   toggle() {
@@ -113,6 +116,8 @@ class GridView {
       }
     }
 
+    this._applyUserOrder();
+
     if (this.cellOrder.length === 0) return;
 
     // Compute grid dimensions
@@ -158,8 +163,9 @@ class GridView {
     this._createLabels();
     this._applyGridTemplate();
 
-    // Set up focus listeners
+    // Set up focus listeners and drag-and-drop
     this._setupFocusListeners();
+    this._setupDragAndDrop();
 
     // Start own ResizeObserver
     this._resizeObserver = new ResizeObserver(() => {
@@ -193,6 +199,7 @@ class GridView {
     this._removeHandles();
     this._removeLabels();
     this._removeFocusListeners();
+    this._removeDragAndDrop();
 
     // Reset each wrapper
     for (const [, entry] of this.terminalManager.terminals) {
@@ -275,6 +282,8 @@ class GridView {
       }
     }
 
+    this._applyUserOrder();
+
     if (this.cellOrder.length === 0) {
       this.deactivate();
       return;
@@ -294,14 +303,18 @@ class GridView {
       this._removeHandles();
       this._removeLabels();
       this._removeFocusListeners();
+      this._removeDragAndDrop();
       this._createHandles();
       this._createLabels();
       this._setupFocusListeners();
+      this._setupDragAndDrop();
     } else {
       this._removeLabels();
       this._removeFocusListeners();
+      this._removeDragAndDrop();
       this._createLabels();
       this._setupFocusListeners();
+      this._setupDragAndDrop();
     }
 
     // Reposition all wrappers — first hide all
@@ -610,6 +623,125 @@ class GridView {
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     });
+  }
+
+  _applyUserOrder() {
+    if (this._userOrder.length === 0) return;
+    const orderMap = new Map();
+    this._userOrder.forEach((id, idx) => orderMap.set(id, idx));
+    const inOrder = [];
+    const notInOrder = [];
+    for (const cell of this.cellOrder) {
+      if (orderMap.has(cell.terminalId)) {
+        inOrder.push(cell);
+      } else {
+        notInOrder.push(cell);
+      }
+    }
+    inOrder.sort((a, b) => orderMap.get(a.terminalId) - orderMap.get(b.terminalId));
+    this.cellOrder = [...inOrder, ...notInOrder];
+  }
+
+  _setupDragAndDrop() {
+    this._dragListeners = [];
+    for (const cell of this.cellOrder) {
+      const entry = this.terminalManager.terminals.get(cell.terminalId);
+      if (!entry) continue;
+      const wrapper = entry.wrapper;
+      const label = wrapper.querySelector('.grid-cell-label');
+      if (!label) continue;
+
+      label.setAttribute('draggable', 'true');
+      const terminalId = cell.terminalId;
+
+      const onDragStart = (e) => {
+        if (e.target.closest('.grid-cell-close') || e.target.closest('.grid-cell-action')) {
+          e.preventDefault();
+          return;
+        }
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', terminalId);
+        this._dragSourceId = terminalId;
+        setTimeout(() => wrapper.classList.add('grid-dragging'), 0);
+      };
+
+      const onDragEnd = () => {
+        wrapper.classList.remove('grid-dragging');
+        this._clearDropIndicators();
+        this._dragSourceId = null;
+      };
+
+      const onDragOver = (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        this._clearDropIndicators();
+        if (this._dragSourceId && this._dragSourceId !== terminalId) {
+          wrapper.classList.add('grid-drop-target');
+        }
+      };
+
+      const onDragLeave = () => {
+        wrapper.classList.remove('grid-drop-target');
+      };
+
+      const onDrop = (e) => {
+        e.preventDefault();
+        wrapper.classList.remove('grid-drop-target');
+        const sourceId = e.dataTransfer.getData('text/plain');
+        if (!sourceId || sourceId === terminalId) return;
+        const fromIndex = this.cellOrder.findIndex(c => c.terminalId === sourceId);
+        const toIndex = this.cellOrder.findIndex(c => c.terminalId === terminalId);
+        if (fromIndex === -1 || toIndex === -1) return;
+        this._reorderCell(fromIndex, toIndex);
+      };
+
+      label.addEventListener('dragstart', onDragStart);
+      label.addEventListener('dragend', onDragEnd);
+      wrapper.addEventListener('dragover', onDragOver);
+      wrapper.addEventListener('dragleave', onDragLeave);
+      wrapper.addEventListener('drop', onDrop);
+
+      this._dragListeners.push(
+        { el: label, event: 'dragstart', handler: onDragStart },
+        { el: label, event: 'dragend', handler: onDragEnd },
+        { el: wrapper, event: 'dragover', handler: onDragOver },
+        { el: wrapper, event: 'dragleave', handler: onDragLeave },
+        { el: wrapper, event: 'drop', handler: onDrop }
+      );
+    }
+  }
+
+  _removeDragAndDrop() {
+    for (const { el, event, handler } of this._dragListeners) {
+      el.removeEventListener(event, handler);
+    }
+    this._dragListeners = [];
+    this._dragSourceId = null;
+  }
+
+  _clearDropIndicators() {
+    for (const cell of this.cellOrder) {
+      const entry = this.terminalManager.terminals.get(cell.terminalId);
+      if (entry) entry.wrapper.classList.remove('grid-drop-target');
+    }
+  }
+
+  _reorderCell(fromIndex, toIndex) {
+    const [moved] = this.cellOrder.splice(fromIndex, 1);
+    this.cellOrder.splice(toIndex, 0, moved);
+    this._userOrder = this.cellOrder.map(c => c.terminalId);
+
+    for (let i = 0; i < this.cellOrder.length; i++) {
+      const cell = this.cellOrder[i];
+      const entry = this.terminalManager.terminals.get(cell.terminalId);
+      if (!entry) continue;
+      const col = i % this.gridCols;
+      const row = Math.floor(i / this.gridCols);
+      entry.wrapper.style.gridColumn = String(col * 2 + 1);
+      entry.wrapper.style.gridRow = String(row * 2 + 1);
+    }
+
+    requestAnimationFrame(() => this._fitAll());
   }
 }
 

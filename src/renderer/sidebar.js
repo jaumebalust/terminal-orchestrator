@@ -3,6 +3,7 @@ class Sidebar {
     this.container = containerEl;
     this.callbacks = callbacks;
     this.state = { workspaces: [], activeWorkspaceId: null, activeProjectId: null, activeTerminalId: null };
+    this._scratchHeight = 120;
   }
 
   setState(state, phantoms) {
@@ -98,6 +99,15 @@ class Sidebar {
 
     // Phantom (scratch) terminals section
     if (this._phantoms && this._phantoms.size > 0) {
+      const scratchHandle = document.createElement('div');
+      scratchHandle.className = 'scratch-resize-handle';
+      this._attachScratchResizeHandler(scratchHandle);
+      this.container.appendChild(scratchHandle);
+
+      const scratchSection = document.createElement('div');
+      scratchSection.className = 'scratch-section';
+      scratchSection.style.height = this._scratchHeight + 'px';
+
       const phantomHeader = document.createElement('div');
       phantomHeader.className = 'sidebar-header';
 
@@ -106,7 +116,7 @@ class Sidebar {
       phantomTitle.textContent = 'SCRATCH';
 
       phantomHeader.appendChild(phantomTitle);
-      this.container.appendChild(phantomHeader);
+      scratchSection.appendChild(phantomHeader);
 
       const phantomList = document.createElement('div');
       phantomList.className = 'sidebar-list phantom-list';
@@ -143,7 +153,8 @@ class Sidebar {
         phantomList.appendChild(item);
       }
 
-      this.container.appendChild(phantomList);
+      scratchSection.appendChild(phantomList);
+      this.container.appendChild(scratchSection);
     }
 
     list.scrollTop = scrollTop;
@@ -712,6 +723,35 @@ class Sidebar {
   _hidePathTooltip() {
     const existing = document.querySelector('.path-tooltip');
     if (existing) existing.remove();
+  }
+
+  _attachScratchResizeHandler(handle) {
+    handle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const startY = e.clientY;
+      const startHeight = this._scratchHeight;
+
+      document.body.style.cursor = 'row-resize';
+      document.body.style.userSelect = 'none';
+
+      const onMouseMove = (ev) => {
+        const delta = startY - ev.clientY;
+        const maxHeight = this.container.clientHeight - 120;
+        this._scratchHeight = Math.max(60, Math.min(maxHeight, startHeight + delta));
+        const section = this.container.querySelector('.scratch-section');
+        if (section) section.style.height = this._scratchHeight + 'px';
+      };
+
+      const onMouseUp = () => {
+        document.removeEventListener('mousemove', onMouseMove);
+        document.removeEventListener('mouseup', onMouseUp);
+        document.body.style.cursor = '';
+        document.body.style.userSelect = '';
+      };
+
+      document.addEventListener('mousemove', onMouseMove);
+      document.addEventListener('mouseup', onMouseUp);
+    });
   }
 
   _clearDragIndicators() {

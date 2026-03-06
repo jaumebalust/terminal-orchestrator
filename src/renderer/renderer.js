@@ -1037,6 +1037,8 @@
       for (const project of workspace.projects) {
         for (const terminal of project.terminals) {
           terminal.needsAttention = false;
+          // Default all terminals hidden from grid (clean slate each session)
+          gridView.hideFromGrid(terminal.id);
         }
       }
     }

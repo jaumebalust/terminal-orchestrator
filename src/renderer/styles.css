@@ -964,6 +964,11 @@ html, body {
   display: flex;
   align-items: center;
   gap: 4px;
+  cursor: grab;
+}
+
+.grid-cell-label:active {
+  cursor: grabbing;
 }
 
 .grid-cell-label-text {
@@ -1010,6 +1015,15 @@ html, body {
   background: rgba(0, 0, 0, 0.2);
 }
 
+#terminal-container.grid-mode .terminal-wrapper.grid-dragging {
+  opacity: 0.4;
+}
+
+#terminal-container.grid-mode .terminal-wrapper.grid-drop-target {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 2px var(--accent), inset 0 0 20px rgba(116, 143, 252, 0.1) !important;
+}
+
 .grid-handle-col {
   cursor: col-resize;
   background: var(--border-color);
@@ -1047,6 +1061,33 @@ html, body {
 
 .grid-toggle-btn.grid-hidden svg rect {
   stroke-dasharray: 2 2;
+}
+
+/* --- Scratch Section --- */
+.scratch-section {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 60px;
+  overflow: hidden;
+}
+
+.scratch-section .phantom-list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.scratch-resize-handle {
+  height: 4px;
+  cursor: row-resize;
+  background: var(--border-color);
+  flex-shrink: 0;
+  transition: background 0.15s;
+}
+
+.scratch-resize-handle:hover,
+.scratch-resize-handle:active {
+  background: var(--accent);
 }
 
 /* Phantom (scratch) terminals */
