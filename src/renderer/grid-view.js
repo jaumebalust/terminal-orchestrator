@@ -36,6 +36,19 @@ class GridView {
     this._userOrder = [];
     this._dragListeners = [];
     this._dragSourceId = null;
+
+    // Focus (master + thumbnails) mode
+    this.viewMode = 'overview'; // 'overview' | 'focus'
+    this.masterTerminalId = null;
+    this.masterFraction = 0.72;
+    this.MASTER_MIN = 0.40;
+    this.MASTER_MAX = 0.85;
+    this._focusRoot = null;
+    this._masterArea = null;
+    this._strip = null;
+    this._divider = null;
+    this._showAllBtn = null;
+    this._onKeyDown = null;
   }
 
   toggle() {
@@ -65,10 +78,14 @@ class GridView {
   removeFromGrid(terminalId) {
     this.hiddenTerminals.add(terminalId);
     if (this.active) {
+      const remaining = this.cellOrder.filter(c => c.terminalId !== terminalId);
       // If we removed the focused terminal, shift focus
       if (this.focusedTerminalId === terminalId) {
-        const remaining = this.cellOrder.filter(c => c.terminalId !== terminalId);
         this.focusedTerminalId = remaining.length > 0 ? remaining[0].terminalId : null;
+      }
+      // If we removed the master in focus mode, promote another terminal
+      if (this.masterTerminalId === terminalId) {
+        this.masterTerminalId = remaining.length > 0 ? remaining[0].terminalId : null;
       }
       this.refresh();
     }
@@ -76,6 +93,10 @@ class GridView {
 
   activate() {
     if (this.active) return;
+
+    // Always open in Overview
+    this.viewMode = 'overview';
+    this.masterTerminalId = null;
 
     const state = this.callbacks.getState();
     this._savedActiveTerminalId = this.terminalManager.activeTerminalId;
@@ -170,9 +191,23 @@ class GridView {
     // Start own ResizeObserver
     this._resizeObserver = new ResizeObserver(() => {
       clearTimeout(this._resizeDebounce);
-      this._resizeDebounce = setTimeout(() => this._fitAll(), 50);
+      this._resizeDebounce = setTimeout(() => {
+        if (this.viewMode === 'focus') this._fitFocusVisible();
+        else this._fitAll();
+      }, 50);
     });
     this._resizeObserver.observe(this.container);
+
+    // Escape deselects (Focus -> Overview) without closing the grid.
+    // Capture phase so it runs before xterm consumes the key.
+    this._onKeyDown = (e) => {
+      if (e.key === 'Escape' && this.viewMode === 'focus') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.enterOverview();
+      }
+    };
+    document.addEventListener('keydown', this._onKeyDown, true);
 
     // Initial fit
     this.active = true;
@@ -185,6 +220,16 @@ class GridView {
   deactivate() {
     if (!this.active) return;
     this.active = false;
+
+    // Tear down Focus layout first so every wrapper is a direct child of the
+    // container again before the wrapper-style reset loop below runs.
+    if (this.viewMode === 'focus') this._teardownFocusDOM();
+    this.viewMode = 'overview';
+    this.masterTerminalId = null;
+    if (this._onKeyDown) {
+      document.removeEventListener('keydown', this._onKeyDown, true);
+      this._onKeyDown = null;
+    }
 
     // Disconnect our resize observer
     if (this._resizeObserver) {
@@ -286,6 +331,24 @@ class GridView {
 
     if (this.cellOrder.length === 0) {
       this.deactivate();
+      return;
+    }
+
+    // Focus mode: keep the master/thumbnail layout in sync with the new cellOrder.
+    if (this.viewMode === 'focus') {
+      // If the master is gone, promote the first remaining terminal.
+      if (!this.cellOrder.find(c => c.terminalId === this.masterTerminalId)) {
+        this.masterTerminalId = this.cellOrder[0].terminalId;
+        this.focusedTerminalId = this.masterTerminalId;
+      }
+      this._removeLabels();
+      this._removeFocusListeners();
+      this._removeDragAndDrop();
+      this._createLabels();
+      this._setupFocusListeners();
+      this._applyFocusLayout();
+      this._highlightFocused();
+      requestAnimationFrame(() => this._fitFocusVisible());
       return;
     }
 
@@ -481,13 +544,30 @@ class GridView {
       if (!entry) continue;
 
       const handler = (e) => {
-        if (e.target.closest('.xterm-viewport')) return;
         if (e.target.closest('.grid-cell-close')) return;
         if (e.target.closest('.grid-cell-action')) return;
-        this.focusedTerminalId = cell.terminalId;
-        this._highlightFocused();
-        entry.xterm.focus();
-        this.callbacks.onFocusTerminal(cell.terminalId);
+
+        const id = cell.terminalId;
+        const isMaster = this.viewMode === 'focus' && id === this.masterTerminalId;
+
+        // Clicking the master (in Focus) just types/scrolls — never deselect.
+        if (isMaster) return;
+
+        // In Overview, reserve the label bar for drag-to-reorder.
+        if (this.viewMode === 'overview' && e.target.closest('.grid-cell-label')) return;
+
+        // Promote this terminal to master. If the click landed in the terminal
+        // body, suppress it so it doesn't start a selection / send input.
+        if (e.target.closest('.xterm-viewport')) {
+          e.preventDefault();
+          e.stopPropagation();
+        }
+
+        if (this.viewMode === 'focus') {
+          this.switchMaster(id);
+        } else {
+          this.enterFocus(id);
+        }
       };
 
       entry.wrapper.addEventListener('mousedown', handler, true);
@@ -643,6 +723,8 @@ class GridView {
   }
 
   _setupDragAndDrop() {
+    // Drag-to-reorder is an Overview-only affordance.
+    if (this.viewMode === 'focus') return;
     this._dragListeners = [];
     for (const cell of this.cellOrder) {
       const entry = this.terminalManager.terminals.get(cell.terminalId);
@@ -742,6 +824,280 @@ class GridView {
     }
 
     requestAnimationFrame(() => this._fitAll());
+  }
+
+  // ---- Focus (master + thumbnails) mode ----
+
+  /** Overview -> Focus, or no-op set master if already focus. Animates the master grow. */
+  enterFocus(terminalId) {
+    const fromOverview = this.viewMode !== 'focus';
+    this.masterTerminalId = terminalId;
+    this.focusedTerminalId = terminalId;
+    this.viewMode = 'focus';
+
+    if (fromOverview) {
+      // Drop Overview-only chrome (row/col handles, grid template, reorder DnD).
+      this._removeHandles();
+      this._removeDragAndDrop();
+      this.container.style.gridTemplateColumns = '';
+      this.container.style.gridTemplateRows = '';
+    }
+
+    this._ensureFocusDOM();
+    this.container.classList.add('focus-mode');
+    this._applyFocusLayout();
+    this._highlightFocused();
+
+    const masterEntry = this.terminalManager.terminals.get(terminalId);
+
+    if (fromOverview && this._strip.style.display !== 'none') {
+      // Grow the master pane from a smaller start so the transition runs.
+      // Disable the transition while we set the start point to avoid a jiggle.
+      this._masterArea.style.transition = 'none';
+      this._masterArea.style.flexBasis = '40%';
+      void this._masterArea.offsetWidth; // force reflow to commit the start
+      this._masterArea.style.transition = '';
+      requestAnimationFrame(() => this._applyMasterFraction());
+    }
+
+    this._afterTransition(this._masterArea, () => {
+      this._fitFocusVisible();
+      if (masterEntry) masterEntry.xterm.focus();
+    });
+
+    this.callbacks.onFocusTerminal(terminalId);
+  }
+
+  /** Focus -> Focus: switch which terminal is the master (slot stays the same size). */
+  switchMaster(terminalId) {
+    if (terminalId === this.masterTerminalId) return;
+    this.masterTerminalId = terminalId;
+    this.focusedTerminalId = terminalId;
+    this._applyFocusLayout();
+    this._highlightFocused();
+    const masterEntry = this.terminalManager.terminals.get(terminalId);
+    requestAnimationFrame(() => {
+      this._fitFocusVisible();
+      if (masterEntry) masterEntry.xterm.focus();
+    });
+    this.callbacks.onFocusTerminal(terminalId);
+  }
+
+  /** Focus -> Overview: tear down the focus layout and rebuild the uniform grid. */
+  enterOverview() {
+    if (this.viewMode !== 'focus') return;
+    this.viewMode = 'overview';
+    this._teardownFocusDOM();
+
+    const count = this.cellOrder.length;
+    this.gridCols = Math.ceil(Math.sqrt(count));
+    this.gridRows = Math.ceil(count / this.gridCols);
+    this.colSizes = new Array(this.gridCols).fill(1);
+    this.rowSizes = new Array(this.gridRows).fill(1);
+
+    for (let i = 0; i < this.cellOrder.length; i++) {
+      const cell = this.cellOrder[i];
+      const entry = this.terminalManager.terminals.get(cell.terminalId);
+      if (!entry) continue;
+      const col = i % this.gridCols;
+      const row = Math.floor(i / this.gridCols);
+      entry.wrapper.style.display = 'flex';
+      entry.wrapper.style.position = 'relative';
+      entry.wrapper.style.gridColumn = String(col * 2 + 1);
+      entry.wrapper.style.gridRow = String(row * 2 + 1);
+    }
+
+    this._removeHandles();
+    this._createHandles();
+    this._applyGridTemplate();
+    this._applyTints();
+    this._setupDragAndDrop();
+    // Keep the last master highlighted so it's easy to see where you were.
+    this.focusedTerminalId = this.masterTerminalId || this.focusedTerminalId;
+    this._highlightFocused();
+    this.masterTerminalId = null;
+
+    requestAnimationFrame(() => this._fitAll());
+  }
+
+  /** Lazily build the Focus DOM (master area, divider, scrollable strip, Show all button). */
+  _ensureFocusDOM() {
+    if (this._focusRoot) return;
+
+    const root = document.createElement('div');
+    root.className = 'grid-focus-root';
+
+    const master = document.createElement('div');
+    master.className = 'grid-master-area';
+
+    const divider = document.createElement('div');
+    divider.className = 'grid-focus-divider';
+
+    const strip = document.createElement('div');
+    strip.className = 'grid-strip';
+
+    root.appendChild(master);
+    root.appendChild(divider);
+    root.appendChild(strip);
+
+    this._focusRoot = root;
+    this._masterArea = master;
+    this._divider = divider;
+    this._strip = strip;
+    this._attachDividerDragHandler();
+
+    const btn = document.createElement('button');
+    btn.className = 'grid-show-all-btn';
+    btn.title = 'Show all (Esc)';
+    btn.innerHTML = '<svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="1.5" y="1.5" width="5" height="5" rx="1"/><rect x="9.5" y="1.5" width="5" height="5" rx="1"/><rect x="1.5" y="9.5" width="5" height="5" rx="1"/><rect x="9.5" y="9.5" width="5" height="5" rx="1"/></svg><span>Show all</span>';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      e.preventDefault();
+      this.enterOverview();
+    });
+    this._showAllBtn = btn;
+
+    this.container.appendChild(root);
+    this.container.appendChild(btn);
+  }
+
+  /** Reparent the master wrapper into the master area and the rest into the strip. */
+  _applyFocusLayout() {
+    this._ensureFocusDOM();
+
+    // Hide any terminal not in the current cellOrder and pull it out of the
+    // focus subtree so stale thumbnails never linger.
+    const ids = new Set(this.cellOrder.map(c => c.terminalId));
+    for (const [tid, entry] of this.terminalManager.terminals) {
+      if (!ids.has(tid)) {
+        entry.wrapper.style.display = 'none';
+        if (entry.wrapper.parentElement && entry.wrapper.parentElement !== this.container) {
+          this.container.appendChild(entry.wrapper);
+        }
+      }
+    }
+
+    // Place master, then thumbnails in cellOrder order.
+    for (const cell of this.cellOrder) {
+      const entry = this.terminalManager.terminals.get(cell.terminalId);
+      if (!entry) continue;
+      const w = entry.wrapper;
+      w.style.display = 'flex';
+      w.style.position = 'relative';
+      w.style.gridColumn = '';
+      w.style.gridRow = '';
+      const target = cell.terminalId === this.masterTerminalId ? this._masterArea : this._strip;
+      if (w.parentElement !== target) target.appendChild(w);
+      // Reorder-drag is Overview-only; don't let labels start a drag in Focus.
+      const label = w.querySelector('.grid-cell-label');
+      if (label) label.setAttribute('draggable', 'false');
+    }
+
+    const hasThumbs = this.cellOrder.length > 1;
+    this._strip.style.display = hasThumbs ? 'flex' : 'none';
+    this._divider.style.display = hasThumbs ? 'block' : 'none';
+    if (hasThumbs) this._applyMasterFraction();
+    else this._masterArea.style.flexBasis = '100%';
+  }
+
+  _applyMasterFraction() {
+    if (this._masterArea) {
+      this._masterArea.style.flexBasis = (this.masterFraction * 100).toFixed(2) + '%';
+    }
+  }
+
+  _attachDividerDragHandler() {
+    this._divider.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const startX = e.clientX;
+      const startFraction = this.masterFraction;
+      const rootWidth = this._focusRoot.clientWidth || this.container.clientWidth;
+
+      const savedCursor = document.body.style.cursor;
+      const savedSelect = document.body.style.userSelect;
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      this._masterArea.classList.add('dragging');
+
+      const onMove = (ev) => {
+        const deltaFrac = (ev.clientX - startX) / rootWidth;
+        let f = startFraction + deltaFrac;
+        f = Math.max(this.MASTER_MIN, Math.min(this.MASTER_MAX, f));
+        this.masterFraction = f;
+        this._applyMasterFraction();
+        clearTimeout(this._dragFitDebounce);
+        this._dragFitDebounce = setTimeout(() => this._fitFocusVisible(), 100);
+      };
+
+      const onUp = () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+        document.body.style.cursor = savedCursor;
+        document.body.style.userSelect = savedSelect;
+        this._masterArea.classList.remove('dragging');
+        this._fitFocusVisible();
+      };
+
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+  }
+
+  _fitFocusVisible() {
+    if (this.masterTerminalId) this.terminalManager.fitTerminal(this.masterTerminalId);
+    for (const cell of this.cellOrder) {
+      if (cell.terminalId === this.masterTerminalId) continue;
+      const entry = this.terminalManager.terminals.get(cell.terminalId);
+      if (!entry || entry.wrapper.style.display === 'none') continue;
+      this.terminalManager.fitTerminal(cell.terminalId);
+    }
+  }
+
+  /** Move every wrapper back to being a direct child of the container, remove focus DOM. */
+  _teardownFocusDOM() {
+    if (this._focusRoot) {
+      const moved = [
+        ...(this._masterArea ? Array.from(this._masterArea.children) : []),
+        ...(this._strip ? Array.from(this._strip.children) : [])
+      ];
+      for (const w of moved) {
+        if (w.classList && w.classList.contains('terminal-wrapper')) {
+          this.container.appendChild(w);
+        }
+      }
+      this._focusRoot.remove();
+    }
+    if (this._showAllBtn) this._showAllBtn.remove();
+
+    // Belt-and-suspenders: guarantee every wrapper is back under the container.
+    for (const [, entry] of this.terminalManager.terminals) {
+      if (entry.wrapper.parentElement !== this.container) {
+        this.container.appendChild(entry.wrapper);
+      }
+    }
+
+    this.container.classList.remove('focus-mode');
+    this._focusRoot = null;
+    this._masterArea = null;
+    this._strip = null;
+    this._divider = null;
+    this._showAllBtn = null;
+  }
+
+  /** Run cb after el's flex-basis transition settles, with a timeout fallback. */
+  _afterTransition(el, cb) {
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      if (el) el.removeEventListener('transitionend', onEnd);
+      cb();
+    };
+    const onEnd = (ev) => {
+      if (ev.propertyName === 'flex-basis' || ev.propertyName === 'flex') finish();
+    };
+    if (el) el.addEventListener('transitionend', onEnd);
+    setTimeout(finish, 280);
   }
 }
 
